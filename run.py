@@ -6,10 +6,10 @@ from github import Github, AuthenticatedUser
 
 def check_password_free_ssh(remote):
     cmd = 'ssh -o "StrictHostKeyChecking=no" -T %s' % remote
-    proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True)
+    proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
     output = proc.communicate()[1]
 
-    result = re.search(r'successfully authenticated', output)
+    result = re.search(r"successfully authenticated", output)
 
     return result is not None
 
@@ -62,6 +62,10 @@ class GithubRepo:
             my_key = ssh_keygen_silent(my_title)
             my_gh = GithubAuth.from_token_file(os.environ.get("GITHUB_TOKEN"))
             my_gh.add_pub_key_to_gh(my_title, my_key)
+
+    @staticmethod
+    def __config__():
+        git_config_file = os.path.join(os.environ.get('HOME'), '.gitconfig')
 
 
 if __name__ == '__main__':
