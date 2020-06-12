@@ -48,24 +48,46 @@ class GithubAuth:
         self.gh.get_user().create_key(title, key)
 
 
-class GithubRepo:
+class GithubMeta(type):
+    def __init__(cls, *args, **kwargs):
+        cls._username = 'luc'
+        cls._email = 'lucmann@qq.com'
 
-    def __init__(self, username, email):
-        self.username = username
-        self.email = email
+    @property
+    def username(cls):
+        return cls._username
+
+    @username.setter
+    def username(cls, username):
+        cls._username = username
+
+    @property
+    def email(cls):
+        return cls._email
+
+    @email.setter
+    def email(cls, email):
+        cls._email = email
+
+
+class GithubRepo(metaclass=GithubMeta):
+
+    def __init__(self):
         self.__auth__()
         self.__config__()
 
-    def __auth__(self):
+    @staticmethod
+    def __auth__():
         if check_password_free_ssh("git@github.com"):
             print('ssh established')
         else:
-            my_title = self.email
+            my_title = GithubRepo.email
             my_key = ssh_keygen_silent(my_title)
             my_gh = GithubAuth.from_token_file(os.environ.get("GITHUB_TOKEN"))
             my_gh.add_pub_key_to_gh(my_title, my_key)
 
-    def __config__(self):
+    @staticmethod
+    def __config__():
         configs = [
             'alias.br branch',
             'alias.ci commit',
@@ -79,13 +101,18 @@ class GithubRepo:
             'core.filemode false',
             'core.autocrlf true',
             'pull.rebase true',
-            'user.name %s' % self.username,
-            'user.email %s' % self.email
+            'user.name %s' % GithubRepo.username,
+            'user.email %s' % GithubRepo.email
         ]
 
         for config in configs:
             os.system('git config --global ' + config)
 
+        print("""
+            Git configuration done! \n\n%s
+        """ % subprocess.check_output('git config --global -l', shell=True, universal_newlines=True))
+
+
 if __name__ == '__main__':
-    GithubRepo('luc', 'luc@sietium.com')
+    GithubRepo()
 
