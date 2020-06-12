@@ -50,24 +50,42 @@ class GithubAuth:
 
 class GithubRepo:
 
-    def __init__(self):
-        pass
+    def __init__(self, username, email):
+        self.username = username
+        self.email = email
+        self.__auth__()
+        self.__config__()
 
-    @staticmethod
-    def __auth__():
+    def __auth__(self):
         if check_password_free_ssh("git@github.com"):
             print('ssh established')
         else:
-            my_title = 'luc@sietium'
+            my_title = self.email
             my_key = ssh_keygen_silent(my_title)
             my_gh = GithubAuth.from_token_file(os.environ.get("GITHUB_TOKEN"))
             my_gh.add_pub_key_to_gh(my_title, my_key)
 
-    @staticmethod
-    def __config__():
-        git_config_file = os.path.join(os.environ.get('HOME'), '.gitconfig')
+    def __config__(self):
+        configs = [
+            'alias.br branch',
+            'alias.ci commit',
+            'alias.co checkout',
+            'alias.st "status -s"',
+            'color.branch true',
+            'color.diff true',
+            'color.interactive true',
+            'color.status true',
+            'core.editor vim',
+            'core.filemode false',
+            'core.autocrlf true',
+            'pull.rebase true',
+            'user.name %s' % self.username,
+            'user.email %s' % self.email
+        ]
 
+        for config in configs:
+            os.system('git config --global ' + config)
 
 if __name__ == '__main__':
-    GithubRepo.__auth__()
+    GithubRepo('luc', 'luc@sietium.com')
 
