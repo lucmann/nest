@@ -2,7 +2,7 @@
 import os
 import re
 import subprocess
-from github import Github, AuthenticatedUser
+from github import Github
 
 def check_password_free_ssh(remote):
     cmd = 'ssh -o "StrictHostKeyChecking=no" -T %s' % remote
