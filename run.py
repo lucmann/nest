@@ -52,6 +52,7 @@ class GithubMeta(type):
     def __init__(cls, *args, **kwargs):
         cls._username = 'luc'
         cls._email = 'lucmann@qq.com'
+        cls._gh = GithubAuth.from_token_file(os.environ.get("GITHUB_TOKEN"))
 
     @property
     def username(cls):
@@ -69,6 +70,10 @@ class GithubMeta(type):
     def email(cls, email):
         cls._email = email
 
+    @property
+    def gh(cls):
+        return cls._gh
+
 
 class GithubRepo(metaclass=GithubMeta):
 
@@ -83,8 +88,7 @@ class GithubRepo(metaclass=GithubMeta):
         else:
             my_title = GithubRepo.email
             my_key = ssh_keygen_silent(my_title)
-            my_gh = GithubAuth.from_token_file(os.environ.get("GITHUB_TOKEN"))
-            my_gh.add_pub_key_to_gh(my_title, my_key)
+            GithubRepo.gh.add_pub_key_to_gh(my_title, my_key)
 
     @staticmethod
     def __config__():
@@ -115,4 +119,6 @@ class GithubRepo(metaclass=GithubMeta):
 
 if __name__ == '__main__':
     GithubRepo()
+    for repo in GithubRepo.gh.gh.get_user().get_repos():
+        print(repo.name)
 
