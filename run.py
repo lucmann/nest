@@ -2,6 +2,8 @@
 import os
 import re
 import subprocess
+import threading
+
 from github import Github
 
 def check_password_free_ssh(remote):
@@ -49,6 +51,19 @@ class GithubAuth:
 
     def get_git_repos(self):
         return self.gh.get_user().get_repos()
+
+
+class Cloner(threading.Thread):
+    def __init__(self, ssh_url, dest_dir):
+        threading.Thread.__init__(self)
+        self.url = ssh_url
+        self.dir = dest_dir
+
+    def run(self):
+        cmd = 'git clone %s' % self.url
+        print("""\n\n%s\n\n""" % subprocess.check_output(
+            cmd, cwd=self.dir, shell=True, universal_newlines=True
+        ))
 
 
 class GithubMeta(type):
@@ -123,16 +138,23 @@ class GithubRepo(metaclass=GithubMeta):
     @staticmethod
     def __clone__():
         repos_dir_path = os.path.join(os.environ.get('HOME'), 'github')
+        cloner_threads = []
 
         for repo in GithubRepo.gh.get_git_repos():
             if os.path.exists(os.path.join(repos_dir_path, repo.name)):
                 continue
 
-            cmd = 'git clone %s' % repo.ssh_url
-            print("""\n\n%s\n\n""" % subprocess.check_output(
-                cmd, cwd=repos_dir_path, shell=True, universal_newlines=True
-            ))
+            cloner_threads.append(Cloner(repo.ssh_url, repos_dir_path))
 
+        for t in cloner_threads:
+            t.start()
+
+        for t in cloner_threads:
+            t.join()
+
+        print("""
+            Git repositories cloned! 
+        """)
 
 if __name__ == '__main__':
     GithubRepo()
