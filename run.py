@@ -44,8 +44,11 @@ class GithubAuth:
 
         return obj
 
-    def add_pub_key_to_gh(self, title, key):
+    def add_pub_key(self, title, key):
         self.gh.get_user().create_key(title, key)
+
+    def get_git_repos(self):
+        return self.gh.get_user().get_repos()
 
 
 class GithubMeta(type):
@@ -80,6 +83,7 @@ class GithubRepo(metaclass=GithubMeta):
     def __init__(self):
         self.__auth__()
         self.__config__()
+        self.__clone__()
 
     @staticmethod
     def __auth__():
@@ -88,7 +92,7 @@ class GithubRepo(metaclass=GithubMeta):
         else:
             my_title = GithubRepo.email
             my_key = ssh_keygen_silent(my_title)
-            GithubRepo.gh.add_pub_key_to_gh(my_title, my_key)
+            GithubRepo.gh.add_pub_key(my_title, my_key)
 
     @staticmethod
     def __config__():
@@ -116,9 +120,20 @@ class GithubRepo(metaclass=GithubMeta):
             Git configuration done! \n\n%s
         """ % subprocess.check_output('git config --global -l', shell=True, universal_newlines=True))
 
+    @staticmethod
+    def __clone__():
+        repos_dir_path = os.path.join(os.environ.get('HOME'), 'github')
+
+        for repo in GithubRepo.gh.get_git_repos():
+            if os.path.exists(os.path.join(repos_dir_path, repo.name)):
+                continue
+
+            cmd = 'git clone %s' % repo.ssh_url
+            print("""\n\n%s\n\n""" % subprocess.check_output(
+                cmd, cwd=repos_dir_path, shell=True, universal_newlines=True
+            ))
+
 
 if __name__ == '__main__':
     GithubRepo()
-    for repo in GithubRepo.gh.gh.get_user().get_repos():
-        print(repo.name)
 
