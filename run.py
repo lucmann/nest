@@ -6,6 +6,33 @@ import threading
 
 from github import Github
 
+def gen_apt_source(source_name, ubuntu_codename):
+    url = 'http://mirrors.{}.com/ubuntu/'.format(source_name)
+    sw_repos = [
+        ' main restricted',
+        '-updates main restricted',
+        ' universe',
+        '-updates universe',
+        ' multiverse',
+        '-updates multiverse',
+        '-backports main restricted universe multiverse',
+        '-security main restricted',
+        '-security universe',
+        '-security multiverse'
+    ]
+
+    sources = []
+    for s in sw_repos:
+        sources.append('deb {} {}{}'.format(url, ubuntu_codename, s))
+
+    return sources
+
+def install_apt_source(source_name, ubuntu_codename):
+    source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(source_name))
+
+    with open(source_filename, 'w') as f:
+        f.writelines(gen_apt_source(source_name, ubuntu_codename))
+
 def check_password_free_ssh(remote):
     cmd = 'ssh -o "StrictHostKeyChecking=no" -T %s' % remote
     proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
