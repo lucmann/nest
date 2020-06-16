@@ -1,37 +1,22 @@
 #!/usr/bin/python3
 import os
 import re
+import sys
 import subprocess
 import threading
 
-from github import Github
 
-def gen_apt_source(source_name, ubuntu_codename):
-    url = 'http://mirrors.{}.com/ubuntu/'.format(source_name)
-    sw_repos = [
-        ' main restricted',
-        '-updates main restricted',
-        ' universe',
-        '-updates universe',
-        ' multiverse',
-        '-updates multiverse',
-        '-backports main restricted universe multiverse',
-        '-security main restricted',
-        '-security universe',
-        '-security multiverse'
-    ]
+def pip_install(module):
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', module])
 
-    sources = []
-    for s in sw_repos:
-        sources.append('deb {} {}{}'.format(url, ubuntu_codename, s))
 
-    return sources
+try:
+    from github import Github
+except ModuleNotFoundError:
+    pip_install('PyGithub')
+finally:
+    from github import Github
 
-def install_apt_source(source_name, ubuntu_codename):
-    source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(source_name))
-
-    with open(source_filename, 'w') as f:
-        f.writelines(gen_apt_source(source_name, ubuntu_codename))
 
 def check_password_free_ssh(remote):
     cmd = 'ssh -o "StrictHostKeyChecking=no" -T %s' % remote
@@ -42,6 +27,7 @@ def check_password_free_ssh(remote):
 
     return result is not None
 
+
 def ssh_keygen_silent(comment):
     cmd = 'cat /dev/zero | ssh-keygen -t rsa -C %s -q -N "" >/dev/null' % comment
     os.system(cmd)
@@ -50,6 +36,54 @@ def ssh_keygen_silent(comment):
     with open(key_file) as f:
         key = f.readline()
         return key.strip('\n')
+
+
+class AptInstaller:
+
+    def __init__(self, source_name='aliyun', codename='focal'):
+        self.source_name = source_name
+        self.codename = codename
+        self.install_apt_source()
+        self.update_apt_source()
+
+    def gen_apt_source(self):
+        url = 'http://mirrors.{}.com/ubuntu/'.format(self.source_name)
+        sw_repos = [
+            ' main restricted',
+            '-updates main restricted',
+            ' universe',
+            '-updates universe',
+            ' multiverse',
+            '-updates multiverse',
+            '-backports main restricted universe multiverse',
+            '-security main restricted',
+            '-security universe',
+            '-security multiverse'
+        ]
+
+        sources = []
+        for s in sw_repos:
+            sources.append('deb {} {}{}'.format(url, self.codename, s))
+
+        return '\n'.join(sources)
+
+    def install_apt_source(self):
+        source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(self.source_name))
+
+        try:
+            with open(source_filename, 'w') as f:
+                f.write(self.gen_apt_source())
+        except PermissionError as e:
+            sys.exit("""
+                You need root privilege to do this!
+                try 'sudo -E ./run.py'
+            """)
+
+    @staticmethod
+    def update_apt_source():
+        subprocess.check_call(['apt', 'update'])
+        subprocess.check_call(['apt', 'upgrade'])
+
 
 class GithubAuth:
 
@@ -183,6 +217,7 @@ class GithubRepo(metaclass=GithubMeta):
             Git repositories cloned! 
         """)
 
-if __name__ == '__main__':
-    GithubRepo()
 
+if __name__ == '__main__':
+    AptInstaller()
+    # GithubRepo()
