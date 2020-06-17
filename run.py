@@ -1,41 +1,10 @@
 #!/usr/bin/python3
+import importlib
 import os
 import re
 import sys
 import subprocess
 import threading
-
-
-def pip_install(module):
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', module])
-
-
-try:
-    from github import Github
-except ModuleNotFoundError:
-    pip_install('PyGithub')
-finally:
-    from github import Github
-
-
-def check_password_free_ssh(remote):
-    cmd = 'ssh -o "StrictHostKeyChecking=no" -T %s' % remote
-    proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
-    output = proc.communicate()[1]
-
-    result = re.search(r"successfully authenticated", output)
-
-    return result is not None
-
-
-def ssh_keygen_silent(comment):
-    cmd = 'cat /dev/zero | ssh-keygen -t rsa -C %s -q -N "" >/dev/null' % comment
-    os.system(cmd)
-
-    key_file = os.path.join(os.environ.get('HOME'), '.ssh/id_rsa.pub')
-    with open(key_file) as f:
-        key = f.readline()
-        return key.strip('\n')
 
 
 class AptInstaller:
@@ -68,21 +37,71 @@ class AptInstaller:
         return '\n'.join(sources)
 
     def install_apt_source(self):
-        source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(self.source_name))
-
+        """
+        > to check root privilege
+        > to accelerate apt update/upgrade
+        :return:
+        """
         try:
+            apt_file = '/etc/apt/sources.list'
+            if os.path.exists(apt_file):
+                os.rename(apt_file, apt_file + '.bak')
+
+            source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(self.source_name))
+
             with open(source_filename, 'w') as f:
                 f.write(self.gen_apt_source())
-        except PermissionError as e:
+        except IOError:
             sys.exit("""
-                You need root privilege to do this!
-                try 'sudo -E ./run.py'
+            You need root privilege to do this!
+            try 'sudo -E ./run.py'
             """)
 
     @staticmethod
     def update_apt_source():
         subprocess.check_call(['apt', 'update'])
         subprocess.check_call(['apt', 'upgrade'])
+
+    @staticmethod
+    def apt_install(package):
+        subprocess.check_call(['apt', 'install', package])
+
+
+def pip_install(module):
+    pip_spec = importlib.util.find_spec('pip')
+    if pip_spec is None:
+        AptInstaller.apt_install('python3-pip')
+
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', module])
+
+
+try:
+    from github import Github
+except ModuleNotFoundError:
+    pip_install('PyGithub')
+finally:
+    from github import Github
+
+
+def check_password_free_ssh(user, remote):
+    private_key_path = os.path.join('/home', user, '.ssh', 'id_rsa')
+    cmd = 'ssh -o "StrictHostKeyChecking=no" -T {} -i {}'.format(remote, private_key_path)
+    proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+    output = proc.communicate()[1]
+
+    result = re.search(r"successfully authenticated", output)
+
+    return result is not None
+
+
+def ssh_keygen_silent(comment):
+    cmd = 'cat /dev/zero | ssh-keygen -t rsa -C %s -q -N "" >/dev/null' % comment
+    os.system(cmd)
+
+    key_file = os.path.join(os.environ.get('HOME'), '.ssh/id_rsa.pub')
+    with open(key_file) as f:
+        key = f.readline()
+        return key.strip('\n')
 
 
 class GithubAuth:
@@ -163,7 +182,7 @@ class GithubRepo(metaclass=GithubMeta):
 
     @staticmethod
     def __auth__():
-        if check_password_free_ssh("git@github.com"):
+        if check_password_free_ssh(GithubRepo.username, "git@github.com"):
             print('ssh established')
         else:
             my_title = GithubRepo.email
@@ -198,7 +217,7 @@ class GithubRepo(metaclass=GithubMeta):
 
     @staticmethod
     def __clone__():
-        repos_dir_path = os.path.join(os.environ.get('HOME'), 'github')
+        repos_dir_path = os.path.join('/home', GithubRepo.username, 'github')
         cloner_threads = []
 
         for repo in GithubRepo.gh.get_git_repos():
@@ -209,7 +228,6 @@ class GithubRepo(metaclass=GithubMeta):
 
         for t in cloner_threads:
             t.start()
-
         for t in cloner_threads:
             t.join()
 
@@ -219,5 +237,6 @@ class GithubRepo(metaclass=GithubMeta):
 
 
 if __name__ == '__main__':
-    AptInstaller()
-    # GithubRepo()
+    GithubRepo.username = 'luc'
+    GithubRepo.email = 'luc@sietium.com'
+    GithubRepo()
