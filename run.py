@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import argparse
 import importlib
 import os
 import re
@@ -237,6 +238,15 @@ class GithubRepo(metaclass=GithubMeta):
 
 
 if __name__ == '__main__':
-    GithubRepo.username = 'luc'
-    GithubRepo.email = 'luc@sietium.com'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--user', '-u', help='specify your username on this machine', default='luc')
+    parser.add_argument('--email', '-e', help='specify your email for git config', default='lucmann@qq.com')
+    parser.add_argument('--apt-source', '-a', dest='apt', help='if you just want to update apt sources', action='store_true')
+    args = parser.parse_args()
+
+    if args.apt:
+        AptInstaller()
+
+    GithubRepo.username = args.user
+    GithubRepo.email = args.email
     GithubRepo()
