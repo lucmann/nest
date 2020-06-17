@@ -10,30 +10,33 @@ import threading
 
 class AptInstaller:
 
-    def __init__(self, source_name='aliyun', codename='focal'):
-        self.source_name = source_name
+    def __init__(self, domain='aliyun', codename='focal'):
+        self.domain = domain
         self.codename = codename
         self.install_apt_source()
         self.update_apt_source()
 
     def gen_apt_source(self):
-        url = 'http://mirrors.{}.com/ubuntu/'.format(self.source_name)
-        sw_repos = [
-            ' main restricted',
-            '-updates main restricted',
-            ' universe',
-            '-updates universe',
-            ' multiverse',
-            '-updates multiverse',
-            '-backports main restricted universe multiverse',
-            '-security main restricted',
-            '-security universe',
-            '-security multiverse'
-        ]
+        if self.domain in ['tsinghua', 'ustc']:
+            protocol = 'https://'
+        else:
+            protocol = 'http://'
+
+        if self.domain in ['ustc']:
+            domain_name = '.'.join([self.domain, 'edu', 'cn'])
+        elif self.domain in ['tsinghua']:
+            domain_name = '.'.join(['tuna', self.domain, 'edu', 'cn'])
+        else:
+            domain_name = '.'.join([self.domain, 'com'])
+
+        suffixes = ['', '-updates', '-backports', '-security', '-proposed']
 
         sources = []
-        for s in sw_repos:
-            sources.append('deb {} {}{}'.format(url, self.codename, s))
+        for suffix in suffixes:
+            sources.append('deb {}mirrors.{}/ubuntu/ {}{} main restricted universe multiverse'.format(
+                protocol, domain_name, self.codename, suffix))
+            sources.append('deb-src {}mirrors.{}/ubuntu/ {}{} main restricted universe multiverse'.format(
+                protocol, domain_name, self.codename, suffix))
 
         return '\n'.join(sources)
 
@@ -48,7 +51,7 @@ class AptInstaller:
             if os.path.exists(apt_file):
                 os.rename(apt_file, apt_file + '.bak')
 
-            source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(self.source_name))
+            source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(self.domain))
 
             with open(source_filename, 'w') as f:
                 f.write(self.gen_apt_source())
@@ -241,11 +244,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--user', '-u', help='specify your username on this machine', default='luc')
     parser.add_argument('--email', '-e', help='specify your email for git config', default='lucmann@qq.com')
-    parser.add_argument('--apt-source', '-a', dest='apt', help='if you just want to update apt sources', action='store_true')
+    parser.add_argument('--ubuntu-codename', '-c', dest='codename',
+                        help='specify Ubuntu codename that you will apt-update', default='focal')
+    parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?',
+                        help='just update apt source with specified source', choices=
+                        ['aliyun', 'tsinghua', 'ustc', '163', 'sohu'], default='aliyun')
+
     args = parser.parse_args()
 
-    if args.apt:
-        AptInstaller()
+    if args.apt_src is not None:
+        AptInstaller(domain=args.apt_src, codename=args.codename)
 
     GithubRepo.username = args.user
     GithubRepo.email = args.email
