@@ -8,11 +8,16 @@ import subprocess
 import threading
 
 
+def ubuntu_codename():
+    proc = subprocess.Popen('. /etc/os-release && echo $UBUNTU_CODENAME',
+                            stdout=subprocess.PIPE, shell=True, universal_newlines=True)
+    return proc.communicate()[0].strip()
+
+
 class AptInstaller:
 
-    def __init__(self, domain='aliyun', codename='focal'):
+    def __init__(self, domain='aliyun'):
         self.domain = domain
-        self.codename = codename
         self.install_apt_source()
         self.update_apt_source()
 
@@ -31,12 +36,14 @@ class AptInstaller:
 
         suffixes = ['', '-updates', '-backports', '-security', '-proposed']
 
+        codename = ubuntu_codename()
+
         sources = []
         for suffix in suffixes:
             sources.append('deb {}mirrors.{}/ubuntu/ {}{} main restricted universe multiverse'.format(
-                protocol, domain_name, self.codename, suffix))
+                protocol, domain_name, codename, suffix))
             sources.append('deb-src {}mirrors.{}/ubuntu/ {}{} main restricted universe multiverse'.format(
-                protocol, domain_name, self.codename, suffix))
+                protocol, domain_name, codename, suffix))
 
         return '\n'.join(sources)
 
@@ -244,8 +251,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--user', '-u', help='specify your username on this machine', default='luc')
     parser.add_argument('--email', '-e', help='specify your email for git config', default='lucmann@qq.com')
-    parser.add_argument('--ubuntu-codename', '-c', dest='codename',
-                        help='specify Ubuntu codename that you will apt-update', default='focal')
     parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?', const='aliyun',
                         help='just update apt source with specified source', choices=
                         ['aliyun', 'tsinghua', 'ustc', '163', 'sohu'], default=None)
@@ -253,7 +258,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.apt_src is not None:
-        AptInstaller(domain=args.apt_src, codename=args.codename)
+        AptInstaller(domain=args.apt_src)
 
     GithubRepo.username = args.user
     GithubRepo.email = args.email
