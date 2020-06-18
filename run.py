@@ -246,9 +246,9 @@ if __name__ == '__main__':
     parser.add_argument('--email', '-e', help='specify your email for git config', default='lucmann@qq.com')
     parser.add_argument('--ubuntu-codename', '-c', dest='codename',
                         help='specify Ubuntu codename that you will apt-update', default='focal')
-    parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?',
+    parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?', const='aliyun',
                         help='just update apt source with specified source', choices=
-                        ['aliyun', 'tsinghua', 'ustc', '163', 'sohu'], default='aliyun')
+                        ['aliyun', 'tsinghua', 'ustc', '163', 'sohu'], default=None)
 
     args = parser.parse_args()
 
