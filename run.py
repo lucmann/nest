@@ -109,7 +109,7 @@ def ssh_keygen_silent(comment):
     cmd = 'cat /dev/zero | ssh-keygen -t rsa -C %s -q -N "" >/dev/null' % comment
     os.system(cmd)
 
-    key_file = os.path.join(os.environ.get('HOME'), '.ssh/id_rsa.pub')
+    key_file = os.path.join('/home', GithubRepo.username, '.ssh', 'id_rsa.pub')
     with open(key_file) as f:
         key = f.readline()
         return key.strip('\n')
