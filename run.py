@@ -7,6 +7,7 @@ import sys
 import subprocess
 import threading
 
+APT_SOURCE_CANDIDATES = ['aliyun', 'tsinghua', 'ustc', '163', 'sohu']
 
 def ubuntu_codename():
     proc = subprocess.Popen('. /etc/os-release && echo $UBUNTU_CODENAME',
@@ -47,6 +48,13 @@ class AptInstaller:
 
         return '\n'.join(sources)
 
+    @staticmethod
+    def apt_source_file_abspath(name):
+        if name == 'sources':
+            return os.path.join('/etc/apt', '{}.list'.format(name))
+        else:
+            return os.path.join('/etc/apt/sources.list.d', '{}.list'.format(name))
+
     def install_apt_source(self):
         """
         > to check root privilege
@@ -54,12 +62,14 @@ class AptInstaller:
         :return:
         """
         try:
-            apt_file = '/etc/apt/sources.list'
+            apt_file = self.apt_source_file_abspath('sources')
             if os.path.exists(apt_file):
                 os.rename(apt_file, apt_file + '.bak')
 
-            source_filename = os.path.join('/etc/apt/sources.list.d', '{}.list'.format(self.domain))
+            # clean the old before installing the new
+            subprocess.check_call('rm -f *.list', cwd='/etc/apt/sources.list.d', shell=True)
 
+            source_filename = self.apt_source_file_abspath(self.domain)
             with open(source_filename, 'w') as f:
                 f.write(self.gen_apt_source())
         except IOError:
@@ -130,12 +140,15 @@ class GithubAuth:
     @classmethod
     def from_token_file(cls, filename):
         obj = cls()
-        with open(filename) as f:
-            # 40-figures GitHub token
-            token = f.readline(40)
-            obj.gh = Github(token)
-
-        return obj
+        try:
+            with open(filename) as f:
+                # 40-figures GitHub token
+                token = f.readline(40)
+                obj.gh = Github(token)
+        except TypeError as err:
+            print("Token file not found!")
+        finally:
+            return obj
 
     def add_pub_key(self, title, key):
         self.gh.get_user().create_key(title, key)
@@ -253,12 +266,13 @@ if __name__ == '__main__':
     parser.add_argument('--email', '-e', help='specify your email for git config', default='lucmann@qq.com')
     parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?', const='aliyun',
                         help='just update apt source with specified source', choices=
-                        ['aliyun', 'tsinghua', 'ustc', '163', 'sohu'], default=None)
+                        APT_SOURCE_CANDIDATES, default=None)
 
     args = parser.parse_args()
 
     if args.apt_src is not None:
         AptInstaller(domain=args.apt_src)
+        sys.exit(0)
 
     GithubRepo.username = args.user
     GithubRepo.email = args.email
