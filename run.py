@@ -226,7 +226,6 @@ class GithubRepo(metaclass=GithubMeta):
             'color.status true',
             'core.editor vim',
             'core.filemode false',
-            'core.autocrlf true',
             'pull.rebase true',
             'user.name %s' % GithubRepo.username,
             'user.email %s' % GithubRepo.email
