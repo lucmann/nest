@@ -100,8 +100,13 @@ try:
     from github import Github
 except ModuleNotFoundError:
     pip_install('PyGithub')
-finally:
     from github import Github
+
+try:
+    from gitlab import Gitlab
+except ModuleNotFoundError:
+    pip_install('python-gitlab')
+    from gitlab import Gitlab
 
 
 def check_password_free_ssh(user, remote):
@@ -165,16 +170,20 @@ class Cloner(threading.Thread):
 
     def run(self):
         cmd = 'git clone %s' % self.url
-        print("""\n\n%s\n\n""" % subprocess.check_output(
+        print("""Cloning {}\n\n{}\n\n""".format(self.url, subprocess.check_output(
             cmd, cwd=self.dir, shell=True, universal_newlines=True
-        ))
+        )))
 
 
-class GithubMeta(type):
+class CHSAccount(type):
+    """
+    Code Hosting Sites account metaclass. use github.com by default.
+    """
     def __init__(cls, *args, **kwargs):
         cls._username = 'luc'
         cls._email = 'lucmann@qq.com'
-        cls._gh = GithubAuth.from_token_file(os.environ.get("GITHUB_TOKEN"))
+        cls._ssh = 'git@github.com'
+        cls._token = os.environ.get('GITHUB_TOKEN')
 
     @property
     def username(cls):
@@ -193,11 +202,23 @@ class GithubMeta(type):
         cls._email = email
 
     @property
-    def gh(cls):
-        return cls._gh
+    def ssh(cls):
+        return cls._ssh
+
+    @ssh.setter
+    def ssh(cls, ssh):
+        cls._ssh = ssh
+
+    @property
+    def token(cls):
+        return cls._token
+
+    @token.setter
+    def token(cls, env_var):
+        cls._token = os.environ.get(env_var)
 
 
-class GithubRepo(metaclass=GithubMeta):
+class GithubRepo(metaclass=CHSAccount):
 
     def __init__(self):
         self.__auth__()
