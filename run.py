@@ -6,6 +6,8 @@ import re
 import sys
 import subprocess
 import threading
+import getpass
+
 
 APT_SOURCE_CANDIDATES = ['aliyun', 'tsinghua', 'ustc', '163', 'sohu']
 
@@ -109,57 +111,16 @@ except ModuleNotFoundError:
     from gitlab import Gitlab
 
 
-def check_password_free_ssh(user, remote):
-    private_key_path = os.path.join('/home', user, '.ssh', 'id_rsa')
-    cmd = 'ssh -o "StrictHostKeyChecking=no" -T {} -i {}'.format(remote, private_key_path)
-    proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
-    output = proc.communicate()[1]
-
-    result = re.search(r"successfully authenticated", output)
-
-    return result is not None
-
-
 def ssh_keygen_silent(comment):
-    cmd = 'cat /dev/zero | ssh-keygen -t rsa -C %s -q -N "" >/dev/null' % comment
-    os.system(cmd)
+    key_file = os.path.join('/home', getpass.getuser(), '.ssh', 'id_rsa.pub')
 
-    key_file = os.path.join('/home', GithubRepo.username, '.ssh', 'id_rsa.pub')
+    if not os.path.exists(key_file):
+        cmd = 'cat /dev/zero | ssh-keygen -t rsa -C %s -q -N "" >/dev/null' % comment
+        os.system(cmd)
+
     with open(key_file) as f:
         key = f.readline()
         return key.strip('\n')
-
-
-class GithubAuth:
-
-    def __init__(self, token=None):
-        self.gh = Github(token)
-
-    @classmethod
-    def from_username_password(cls, username, password):
-        obj = cls()
-        obj.gh = Github(username, password)
-
-        return obj
-
-    @classmethod
-    def from_token_file(cls, filename):
-        obj = cls()
-        try:
-            with open(filename) as f:
-                # 40-figures GitHub token
-                token = f.readline(40)
-                obj.gh = Github(token)
-        except TypeError as err:
-            print("Token file not found!")
-        finally:
-            return obj
-
-    def add_pub_key(self, title, key):
-        self.gh.get_user().create_key(title, key)
-
-    def get_git_repos(self):
-        return self.gh.get_user().get_repos()
 
 
 class Cloner(threading.Thread):
@@ -169,7 +130,7 @@ class Cloner(threading.Thread):
         self.dir = dest_dir
 
     def run(self):
-        cmd = 'git clone %s' % self.url
+        cmd = 'git clone --depth 1 %s' % self.url
         print("""Cloning {}\n\n{}\n\n""".format(self.url, subprocess.check_output(
             cmd, cwd=self.dir, shell=True, universal_newlines=True
         )))
@@ -180,7 +141,7 @@ class CHSAccount(type):
     Code Hosting Sites account metaclass. use github.com by default.
     """
     def __init__(cls, *args, **kwargs):
-        cls._username = 'luc'
+        cls._username = 'lucmann'
         cls._email = 'lucmann@qq.com'
         cls._ssh = 'git@github.com'
         cls._token = os.environ.get('GITHUB_TOKEN')
@@ -217,25 +178,86 @@ class CHSAccount(type):
     def token(cls, env_var):
         cls._token = os.environ.get(env_var)
 
+    @property
+    def ssh_is_password_free(cls):
+        """
+        :param cls:
+        :return: if ssh is connected
 
-class GithubRepo(metaclass=CHSAccount):
+        The strings returned by ssh servers may vary. For example,
 
+        Welcome to GitLab, @$username!
+        Hi $username! You've successfully authenticated, but GitHub does not provide shell access.
+
+        But anyway on success, $username will be echoed.
+        """
+
+        private_key_path = os.path.join('/home', getpass.getuser(), '.ssh', 'id_rsa')
+        if not os.path.exists(private_key_path):
+            return False
+
+        cmd = 'ssh -o "StrictHostKeyChecking=no" -T {} -i {}'.format(cls._ssh, private_key_path)
+        proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+        output = proc.communicate()[1]
+
+        result = re.search(r'{}'.format(cls._username), output)
+
+        return result is not None
+
+
+class GithubRepos(metaclass=CHSAccount):
     def __init__(self):
-        self.__auth__()
-        self.__config__()
+        self._session = self.open_session()
+        self.add_ssh_key()
+
+    def open_session(self):
+        try:
+            with open(type(self).token) as f:
+                # 40-figures GitHub token
+                token = f.readline(40)
+                return Github(token)
+        except TypeError as err:
+            assert None, "GITHUB_TOKEN Not Found!"
+
+    def add_ssh_key(self):
+        if type(self).ssh_is_password_free:
+            print('SSH connection has been available.')
+        else:
+            my_key = ssh_keygen_silent(type(self).email)
+            self._session.get_user().create_key(type(self).email, my_key)
+
+    def get_repos(self):
+        print(type(self._session))
+        return self._session.get_user().get_repos()
+
+
+class GitClone:
+    def __init__(self, sources, dest=os.path.join('/home', getpass.getuser(), 'github')):
+        self.code_hosting_sites = sources
+        self.dest_dir = dest
         self.__clone__()
 
-    @staticmethod
-    def __auth__():
-        if check_password_free_ssh(GithubRepo.username, "git@github.com"):
-            print('ssh established')
-        else:
-            my_title = GithubRepo.email
-            my_key = ssh_keygen_silent(my_title)
-            GithubRepo.gh.add_pub_key(my_title, my_key)
+    def __clone__(self):
+        target_repos = []
+        cloner_threads = []
 
-    @staticmethod
-    def __config__():
+        for chs in self.code_hosting_sites:
+            target_repos += chs.get_repos()
+
+        for repo in target_repos:
+            if os.path.exists(os.path.join(self.dest_dir, repo.name)):
+                continue
+
+            cloner_threads.append(Cloner(repo.ssh_url, self.dest_dir))
+
+        for t in cloner_threads:
+            t.start()
+        for t in cloner_threads:
+            t.join()
+
+
+class GitConfig:
+    def __init__(self, username, email):
         configs = [
             'alias.br branch',
             'alias.ci commit',
@@ -248,41 +270,21 @@ class GithubRepo(metaclass=CHSAccount):
             'core.editor vim',
             'core.filemode false',
             'pull.rebase true',
-            'user.name %s' % GithubRepo.username,
-            'user.email %s' % GithubRepo.email
+            'user.name %s'.format(username),
+            'user.email %s'.format(email)
         ]
 
         for config in configs:
             os.system('git config --global ' + config)
 
         print("""
-            Git configuration done! \n\n%s
+            Git configuration done! \n\n%s\n\n
         """ % subprocess.check_output('git config --global -l', shell=True, universal_newlines=True))
-
-    @staticmethod
-    def __clone__():
-        repos_dir_path = os.path.join('/home', GithubRepo.username, 'github')
-        cloner_threads = []
-
-        for repo in GithubRepo.gh.get_git_repos():
-            if os.path.exists(os.path.join(repos_dir_path, repo.name)):
-                continue
-
-            cloner_threads.append(Cloner(repo.ssh_url, repos_dir_path))
-
-        for t in cloner_threads:
-            t.start()
-        for t in cloner_threads:
-            t.join()
-
-        print("""
-            Git repositories cloned! 
-        """)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--user', '-u', help='specify your username on this machine', default='luc')
+    parser.add_argument('--user', '-u', help='specify your username on this machine', default='lucmann')
     parser.add_argument('--email', '-e', help='specify your email for git config', default='lucmann@qq.com')
     parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?', const='aliyun',
                         help='just update apt source with specified source', choices=
@@ -294,6 +296,6 @@ if __name__ == '__main__':
         AptInstaller(domain=args.apt_src)
         sys.exit(0)
 
-    GithubRepo.username = args.user
-    GithubRepo.email = args.email
-    GithubRepo()
+    GithubRepos.username = args.user
+    GithubRepos.email = args.email
+    GitClone([GithubRepos()])
