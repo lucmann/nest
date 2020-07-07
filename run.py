@@ -124,15 +124,15 @@ def ssh_keygen_silent(comment):
 
 
 class Cloner(threading.Thread):
-    def __init__(self, ssh_url, dest_dir):
+    def __init__(self, repo, dest_dir):
         threading.Thread.__init__(self)
-        self.url = ssh_url
+        self.repo = repo
         self.dir = dest_dir
 
     def run(self):
-        cmd = 'git clone --depth 1 %s' % self.url
-        print("""Cloning {}\n\n{}\n\n""".format(self.url, subprocess.check_output(
-            cmd, cwd=self.dir, shell=True, universal_newlines=True
+        cmd = 'git clone --depth 1 %s' % self.repo.url
+        print("""Cloning {}\n\n{}\n\n""".format(self.repo.url, subprocess.check_output(
+            cmd, cwd=self.dir, shell=True, text=True
         )))
 
 
@@ -197,15 +197,25 @@ class CHSAccount(type):
             return False
 
         cmd = 'ssh -o "StrictHostKeyChecking=no" -T {} -i {}'.format(cls._ssh, private_key_path)
-        proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
-        output = proc.communicate()[1]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, text=True)
+        for s in proc.communicate():
+            if re.search(r'{}'.format(cls._username), s):
+                return True
 
-        result = re.search(r'{}'.format(cls._username), output)
-
-        return result is not None
+        return False
 
 
-class GithubRepos(metaclass=CHSAccount):
+class Repo:
+    """
+    A generic repository encapsulating different repository objects such as gitlab and github
+    """
+    def __init__(self, name, url):
+        self.name = name
+        self.url = url
+        self.cloned = False
+
+
+class GitHubRepos(metaclass=CHSAccount):
     def __init__(self):
         self._session = self.open_session()
         self.add_ssh_key()
@@ -227,8 +237,32 @@ class GithubRepos(metaclass=CHSAccount):
             self._session.get_user().create_key(type(self).email, my_key)
 
     def get_repos(self):
-        print(type(self._session))
-        return self._session.get_user().get_repos()
+        return [ Repo(r.name, r.ssh_url) for r in self._session.get_user().get_repos() ]
+
+
+class GitLabRepos(metaclass=CHSAccount):
+    def __init__(self):
+        self._session = self.open_session()
+        self._session.auth()
+        self.add_ssh_key()
+
+    def open_session(self):
+        try:
+            with open(type(self).token) as f:
+                token = f.readline().strip('\n')
+                return Gitlab('https://gitlab.freedesktop.org', private_token=token)
+        except TypeError as err:
+            assert None, "GITLAB_TOKEN Not Found!"
+
+    def add_ssh_key(self):
+        if type(self).ssh_is_password_free:
+            print('SSH connection has been available.')
+        else:
+            my_key = ssh_keygen_silent(type(self).email)
+            self._session.user.keys.create({'title': type(self).email, 'key': my_key})
+
+    def get_repos(self):
+        return [ Repo(r.name, r.ssh_url_to_repo) for r in self._session.projects.list(owned=True) ]
 
 
 class GitClone:
@@ -248,12 +282,15 @@ class GitClone:
             if os.path.exists(os.path.join(self.dest_dir, repo.name)):
                 continue
 
-            cloner_threads.append(Cloner(repo.ssh_url, self.dest_dir))
+            cloner_threads.append(Cloner(repo, self.dest_dir))
 
         for t in cloner_threads:
             t.start()
         for t in cloner_threads:
             t.join()
+
+        for r in target_repos:
+            print(r.url)
 
 
 class GitConfig:
@@ -279,7 +316,7 @@ class GitConfig:
 
         print("""
             Git configuration done! \n\n%s\n\n
-        """ % subprocess.check_output('git config --global -l', shell=True, universal_newlines=True))
+        """ % subprocess.check_output('git config --global -l', shell=True, text=True))
 
 
 if __name__ == '__main__':
@@ -296,6 +333,8 @@ if __name__ == '__main__':
         AptInstaller(domain=args.apt_src)
         sys.exit(0)
 
-    GithubRepos.username = args.user
-    GithubRepos.email = args.email
-    GitClone([GithubRepos()])
+    GitLabRepos.username = args.user
+    GitLabRepos.email = args.email
+    GitLabRepos.token = 'GITLAB_TOKEN'
+    GitLabRepos.ssh = 'git@gitlab.freedesktop.org'
+    GitClone([GitLabRepos(), GitHubRepos()])
