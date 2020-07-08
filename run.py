@@ -6,6 +6,7 @@ import re
 import sys
 import subprocess
 import getpass
+import socket
 from multiprocessing.pool import ThreadPool
 
 APT_SOURCE_CANDIDATES = ['aliyun', 'tsinghua', 'ustc', '163', 'sohu']
@@ -238,8 +239,9 @@ class GitHubRepos(metaclass=CHSAccount):
         if type(self).ssh_is_password_free:
             print('SSH connection has been available.')
         else:
-            my_key = ssh_keygen_silent(type(self).email)
-            self._session.get_user().create_key(type(self).email, my_key)
+            title = socket.gethostname()
+            key = ssh_keygen_silent(type(self).email)
+            self._session.get_user().create_key(title, key)
 
     def get_repos(self):
         return [ Repo(r.name, r.ssh_url) for r in self._session.get_user().get_repos() ]
@@ -261,10 +263,11 @@ class GitLabRepos(metaclass=CHSAccount):
 
     def add_ssh_key(self):
         if type(self).ssh_is_password_free:
-            print('SSH connection has been available.')
+            print('SSH connection to {} has been available.'.format(type(self).ssh))
         else:
-            my_key = ssh_keygen_silent(type(self).email)
-            self._session.user.keys.create({'title': type(self).email, 'key': my_key})
+            title = socket.gethostname()
+            key = ssh_keygen_silent(type(self).email)
+            self._session.user.keys.create({'title': title, 'key': key})
 
     def get_repos(self):
         return [ Repo(r.name, r.ssh_url_to_repo) for r in self._session.projects.list(owned=True) ]
