@@ -229,15 +229,14 @@ class GitHubRepos(metaclass=CHSAccount):
     def open_session(self):
         try:
             with open(type(self).token) as f:
-                # 40-figures GitHub token
-                token = f.readline(40)
+                token = f.readline().strip('\n')
                 return Github(token)
         except TypeError as err:
             assert None, "GITHUB_TOKEN Not Found!"
 
     def add_ssh_key(self):
         if type(self).ssh_is_password_free:
-            print('SSH connection has been available.')
+            print('SSH connection to {} has been available.'.format(type(self).ssh))
         else:
             title = socket.gethostname()
             key = ssh_keygen_silent(type(self).email)
