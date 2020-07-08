@@ -150,7 +150,7 @@ class CHSAccount(type):
         cls._username = 'lucmann'
         cls._email = 'lucmann@qq.com'
         cls._ssh = 'git@github.com'
-        cls._token = os.environ.get('GITHUB_TOKEN')
+        cls._token = None
 
     @property
     def username(cls):
@@ -181,8 +181,8 @@ class CHSAccount(type):
         return cls._token
 
     @token.setter
-    def token(cls, env_var):
-        cls._token = os.environ.get(env_var)
+    def token(cls, file):
+        cls._token = file
 
     @property
     def ssh_is_password_free(cls):
@@ -232,7 +232,7 @@ class GitHubRepos(metaclass=CHSAccount):
                 token = f.readline().strip('\n')
                 return Github(token)
         except TypeError as err:
-            assert None, "GITHUB_TOKEN Not Found!"
+            assert None, "Please tell me a file that saves a token for {}".format(type(self).ssh)
 
     def add_ssh_key(self):
         if type(self).ssh_is_password_free:
@@ -258,7 +258,7 @@ class GitLabRepos(metaclass=CHSAccount):
                 token = f.readline().strip('\n')
                 return Gitlab('https://gitlab.freedesktop.org', private_token=token)
         except TypeError as err:
-            assert None, "GITLAB_TOKEN Not Found!"
+            assert None, "Please tell me a file that saves a token for {}".format(type(self).ssh)
 
     def add_ssh_key(self):
         if type(self).ssh_is_password_free:
@@ -330,6 +330,10 @@ if __name__ == '__main__':
     parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?', const='aliyun',
                         help='just update apt source with specified source', choices=
                         APT_SOURCE_CANDIDATES, default=None)
+    parser.add_argument('--github-token', dest='gh_token', help='specify file path saving GitHub personal access token',
+                        nargs='?', const=os.path.join('/home', getpass.getuser(), 'github-token.txt'), default=None)
+    parser.add_argument('--gitlab-token', dest='gl_token', help='specify file path saving GitLab personal access token',
+                        nargs='?', const=os.path.join('/home', getpass.getuser(), 'gitlab-token.txt'), default=None)
 
     args = parser.parse_args()
 
@@ -337,8 +341,23 @@ if __name__ == '__main__':
         AptInstaller(domain=args.apt_src)
         sys.exit(0)
 
-    GitLabRepos.username = args.user
-    GitLabRepos.email = args.email
-    GitLabRepos.token = 'GITLAB_TOKEN'
-    GitLabRepos.ssh = 'git@gitlab.freedesktop.org'
-    GitClone([GitLabRepos(), GitHubRepos()])
+    code_hosting_sites = []
+
+    if args.gh_token is not None:
+        GitHubRepos.username = args.user
+        GitHubRepos.email = args.email
+        GitHubRepos.token = args.gh_token
+        GitHubRepos.ssh = 'git@github.com'
+
+        code_hosting_sites.append(GitHubRepos())
+
+    if args.gl_token is not None:
+        GitLabRepos.username = args.user
+        GitLabRepos.email = args.email
+        GitLabRepos.token = args.gl_token
+        GitLabRepos.ssh = 'git@gitlab.freedesktop.org'
+
+        code_hosting_sites.append(GitLabRepos())
+
+    if len(code_hosting_sites):
+        GitClone(code_hosting_sites)
