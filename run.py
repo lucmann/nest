@@ -5,9 +5,8 @@ import os
 import re
 import sys
 import subprocess
-import threading
 import getpass
-
+from multiprocessing.pool import ThreadPool
 
 APT_SOURCE_CANDIDATES = ['aliyun', 'tsinghua', 'ustc', '163', 'sohu']
 
@@ -123,17 +122,23 @@ def ssh_keygen_silent(comment):
         return key.strip('\n')
 
 
-class Cloner(threading.Thread):
+class Cloner:
     def __init__(self, repo, dest_dir):
-        threading.Thread.__init__(self)
+        self.pool = ThreadPool(processes=1)
         self.repo = repo
         self.dir = dest_dir
 
-    def run(self):
-        cmd = 'git clone --depth 1 %s' % self.repo.url
-        print("""Cloning {}\n\n{}\n\n""".format(self.repo.url, subprocess.check_output(
-            cmd, cwd=self.dir, shell=True, text=True
+    @staticmethod
+    def __clone__(src, dest):
+        cmd = 'git clone --depth 1 %s' % src.url
+        print("""Cloning {}\n\n{}\n\n""".format(src.url, subprocess.check_output(
+            cmd, cwd=dest, shell=True, text=True
         )))
+
+        return True
+
+    def start(self):
+        return self.pool.apply_async(self.__clone__, (self.repo, self.dir))
 
 
 class CHSAccount(type):
@@ -284,13 +289,10 @@ class GitClone:
 
             cloner_threads.append(Cloner(repo, self.dest_dir))
 
-        for t in cloner_threads:
-            t.start()
-        for t in cloner_threads:
-            t.join()
+        cloner_results = [ ct.start() for ct in cloner_threads ]
 
-        for r in target_repos:
-            print(r.url)
+        for r in cloner_results:
+            print(r.get())
 
 
 class GitConfig:
