@@ -144,13 +144,18 @@ class Cloner:
 
 class CHSAccount(type):
     """
-    Code Hosting Sites account metaclass. use github.com by default.
+    Code Hosting Sites account metaclass.
+
+    @attribute username for checking if ssh connection is available
+    @attribute ssh for target CHS ssh hostname in form of git@domain
+    @attribute token person access token for accessing CHS
+    @attribute url for GitLab API wrapper requires the web url for establishing a session
     """
     def __init__(cls, *args, **kwargs):
-        cls._username = 'lucmann'
-        cls._email = 'lucmann@qq.com'
-        cls._ssh = 'git@github.com'
-        cls._token = None
+        cls._username = ''
+        cls._ssh = ''
+        cls._token = ''
+        cls._url = ''
 
     @property
     def username(cls):
@@ -161,12 +166,12 @@ class CHSAccount(type):
         cls._username = username
 
     @property
-    def email(cls):
-        return cls._email
+    def url(cls):
+        return cls._url
 
-    @email.setter
-    def email(cls, email):
-        cls._email = email
+    @url.setter
+    def url(cls, url):
+        cls._url = url
 
     @property
     def ssh(cls):
@@ -239,7 +244,7 @@ class GitHubRepos(metaclass=CHSAccount):
             print('SSH connection to {} has been available.'.format(type(self).ssh))
         else:
             title = socket.gethostname()
-            key = ssh_keygen_silent(type(self).email)
+            key = ssh_keygen_silent(title)
             self._session.get_user().create_key(title, key)
 
     def get_repos(self):
@@ -256,7 +261,7 @@ class GitLabRepos(metaclass=CHSAccount):
         try:
             with open(type(self).token) as f:
                 token = f.readline().strip('\n')
-                return Gitlab('https://gitlab.freedesktop.org', private_token=token)
+                return Gitlab(type(self).url, private_token=token)
         except TypeError as err:
             assert None, "Please tell me a file that saves a token for {}".format(type(self).ssh)
 
@@ -265,7 +270,7 @@ class GitLabRepos(metaclass=CHSAccount):
             print('SSH connection to {} has been available.'.format(type(self).ssh))
         else:
             title = socket.gethostname()
-            key = ssh_keygen_silent(type(self).email)
+            key = ssh_keygen_silent(title)
             self._session.user.keys.create({'title': title, 'key': key})
 
     def get_repos(self):
@@ -334,6 +339,10 @@ if __name__ == '__main__':
                         nargs='?', const=os.path.join('/home', getpass.getuser(), 'github-token.txt'), default=None)
     parser.add_argument('--gitlab-token', dest='gl_token', help='specify file path saving GitLab personal access token',
                         nargs='?', const=os.path.join('/home', getpass.getuser(), 'gitlab-token.txt'), default=None)
+    parser.add_argument('--github-user', dest='gh_user', help='specify your GitHub account username', default='lucmann')
+    parser.add_argument('--gitlab-user', dest='gl_user', help='specify your GitLab account username', default='lucmann')
+    parser.add_argument('--gitlab-url', dest='gl_url', help='specify GitLab website url that is used to establish session',
+                        default='https://gitlab.freedesktop.org')
 
     args = parser.parse_args()
 
@@ -345,7 +354,6 @@ if __name__ == '__main__':
 
     if args.gh_token is not None:
         GitHubRepos.username = args.user
-        GitHubRepos.email = args.email
         GitHubRepos.token = args.gh_token
         GitHubRepos.ssh = 'git@github.com'
 
@@ -353,7 +361,7 @@ if __name__ == '__main__':
 
     if args.gl_token is not None:
         GitLabRepos.username = args.user
-        GitLabRepos.email = args.email
+        GitLabRepos.url = args.gl_url
         GitLabRepos.token = args.gl_token
         GitLabRepos.ssh = 'git@gitlab.freedesktop.org'
 
