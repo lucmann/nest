@@ -316,8 +316,8 @@ class GitConfig:
             'core.editor vim',
             'core.filemode false',
             'pull.rebase true',
-            'user.name %s'.format(username),
-            'user.email %s'.format(email)
+            'user.name {}'.format(username),
+            'user.email {}'.format(email)
         ]
 
         for config in configs:
@@ -330,7 +330,7 @@ class GitConfig:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--user', '-u', help='specify your username on this machine', default='lucmann')
+    parser.add_argument('--user', '-u', help='specify your username on this machine', default='luc')
     parser.add_argument('--email', '-e', help='specify your email for git config', default='lucmann@qq.com')
     parser.add_argument('--apt-source', '-a', dest='apt_src', nargs='?', const='aliyun',
                         help='just update apt source with specified source', choices=
@@ -343,8 +343,13 @@ if __name__ == '__main__':
     parser.add_argument('--gitlab-user', dest='gl_user', help='specify your GitLab account username', default='lucmann')
     parser.add_argument('--gitlab-url', dest='gl_url', help='specify GitLab website url that is used to establish session',
                         default='https://gitlab.freedesktop.org')
+    parser.add_argument('--git-config', dest='git_config', help='configure your git', default=False,
+                        action='store_true')
 
     args = parser.parse_args()
+
+    if args.git_config:
+        GitConfig(args.user, args.email)
 
     if args.apt_src is not None:
         AptInstaller(domain=args.apt_src)
@@ -353,14 +358,14 @@ if __name__ == '__main__':
     code_hosting_sites = []
 
     if args.gh_token is not None:
-        GitHubRepos.username = args.user
+        GitHubRepos.username = args.gh_user
         GitHubRepos.token = args.gh_token
         GitHubRepos.ssh = 'git@github.com'
 
         code_hosting_sites.append(GitHubRepos())
 
     if args.gl_token is not None:
-        GitLabRepos.username = args.user
+        GitLabRepos.username = args.gl_user
         GitLabRepos.url = args.gl_url
         GitLabRepos.token = args.gl_token
         GitLabRepos.ssh = 'git@gitlab.freedesktop.org'
@@ -369,3 +374,4 @@ if __name__ == '__main__':
 
     if len(code_hosting_sites):
         GitClone(code_hosting_sites)
+
