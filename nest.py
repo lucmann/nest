@@ -133,7 +133,7 @@ class Cloner:
     def __clone__(src, dest):
         cmd = 'git clone --depth 1 %s' % src.url
         print("""Cloning {}\n\n{}\n\n""".format(src.url, subprocess.check_output(
-            cmd, cwd=dest, shell=True, text=True
+            cmd, cwd=dest, shell=True, universal_newlines=True
         )))
 
         return True
@@ -208,7 +208,8 @@ class CHSAccount(type):
             return False
 
         cmd = 'ssh -o "StrictHostKeyChecking=no" -T {} -i {}'.format(cls._ssh, private_key_path)
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, text=True)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                shell=True, universal_newlines=True)
         for s in proc.communicate():
             if re.search(r'{}'.format(cls._username), s):
                 return True
@@ -325,7 +326,7 @@ class GitConfig:
 
         print("""
             Git configuration done! \n\n%s\n\n
-        """ % subprocess.check_output('git config --global -l', shell=True, text=True))
+        """ % subprocess.check_output('git config --global -l', shell=True, universal_newlines=True))
 
 
 if __name__ == '__main__':
